@@ -7,12 +7,12 @@ class UnigramMarkov(object):
         self.word_taggings = {}
         self.likely_tag = {}
         self.tag_words = {}
-        self.tag_words['/N'] = {}
-        self.tag_words['/F'] = {}
-        self.tag_words['/E'] = {}
-        self.tag_words['/D'] = {}
-        self.tag_words['/A'] = {}
-        self.tag_words['/R'] = {}
+        self.tag_lookup = {}
+        self.tags = ['/N','/F','/E','/A','/D','/S','/T']
+
+        for i,tag in enumerate(self.tags):
+            self.tag_lookup[tag] = i
+            self.tag_words[tag] = {}
 
         test = open(os.getcwd() + '/hw3-data/test.txt')
         self.test_text = test.readlines()
