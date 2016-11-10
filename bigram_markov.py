@@ -1,19 +1,31 @@
 import os
-
-
+import nltk as nltk
+from tabulate import tabulate
+import numpy as np
+from HMM_Map import *
+from pandas import DataFrame
 class UnigramMarkov(object):
 
     def __init__(self):
         self.word_taggings = {}
-        self.likely_tag = {}
         self.tag_words = {}
-        self.tag_lookup = {}
-        self.tags = ['/N','/F','/E','/A','/D','/S','/T']
+        self.row_lookup = {}
+        self.column_lookup = {}
+        self.tags = ['/N','/F','/E','/D','/A','/R',]
 
+        self.tag_matrix = []
+        self.states = []
         for i,tag in enumerate(self.tags):
-            self.tag_lookup[tag] = i
+            self.row_lookup[tag] = i
+            self.column_lookup[tag] = i+1
             self.tag_words[tag] = {}
-
+        self.tag_words['/T'] = {}
+        self.tag_words['/S'] = {}
+        self.row_lookup['/T'] = 6
+        self.column_lookup['/S'] = 0
+        
+        for i in range(0, 7):
+            self.tag_matrix.append( [0]*7)
         test = open(os.getcwd() + '/hw3-data/test.txt')
         self.test_text = test.readlines()
         for line in self.test_text:
@@ -22,52 +34,77 @@ class UnigramMarkov(object):
         self.train_text = train.readlines()
         for line in self.train_text:
             line = line.rstrip()
+
     def read_train(self): 
-        word_l = []
-        tag_l = []
+
         
+ 
         # Read train file, split words and tags, enter info into word-tag dict
         for line in self.train_text:
-      
+            tag_l = []
+            line=line.rstrip()
+            line = '<s>/S ' + line + ' </s>/T' 
             for w_tag_pair in line.split():
-               
+                
                 word = w_tag_pair[:-2]
                 tag = w_tag_pair[-2:]
-                word_l.append(word)
                 tag_l.append(tag)
                 if word in self.word_taggings.keys():
                     if tag in self.word_taggings[word].keys():
-                        self.word_taggings[word][tag] += 1
+                        self.word_taggings[word][tag] += 1.
                     else:
-                        self.word_taggings[word][tag] = 1
+                        self.word_taggings[word][tag] = 1.
                 else:
-                    self.word_taggings[word] = {}
-                    self.likely_tag[word] = ''
-                    self.word_taggings[word][tag] = 1
-        # determine most likely tagging for each word
-        for word, tags in self.word_taggings.items():
-            max_tag = ['',0]
-            for tag, number in tags.items():        
-                if int(number) >= max_tag[1]:
-                    max_tag = [tag,number]
-                    self.likely_tag[word] = tag
+                    self.word_taggings[word] = {}                    
+                    self.word_taggings[word][tag] = 1.
+            tag_grams = nltk.ngrams(tag_l, 2)
+            for gram in tag_grams:
+                self.tag_matrix[self.row_lookup[gram[1]]][self.column_lookup[gram[0]]] += 1.
 
+        # Smoothing, change all 1 ct words to <unk>
+        remove_list = []
+        for word, tags in self.word_taggings.items():  
+            if sum(tags.values()) == 1:
+                remove_list.append(word)
+        self.word_taggings['<unk>'] = {}
+        for w in remove_list:
+            # copy tag values into unk entry
+            for tag,val in self.word_taggings[w].items():
+                if tag in self.word_taggings['<unk>'].keys():
+                    self.word_taggings['<unk>'][tag] += val
+                else:
+                    self.word_taggings['<unk>'][tag] = val
+            del(self.word_taggings[w])           
+    
         # populate tag_words dic : { tag : {word: count} }
         
         for word,tags in self.word_taggings.items():
             for tag,number in tags.items():
                 if word in self.tag_words[tag].keys():
-                    self.tag_words[tag][word] += 1
+                    self.tag_words[tag][word] += 1.
                 else:
-                    self.tag_words[tag][word] = 1
+                    self.tag_words[tag][word] = 1.
+        # turn tag_words into probabilities
+        for tag, wcs in self.tag_words.items():
+            for word,count in wcs.items():
+                self.tag_words[tag][word] = count / sum(wcs.values())
+        self.tag_matrix = np.array(self.tag_matrix)
+        col_sum = self.tag_matrix.sum(axis=0)
+        for i,row in enumerate(self.tag_matrix):
+            for j,entry in enumerate(row):
+                self.tag_matrix[i][j] = entry / col_sum[j]
+
+        print (DataFrame(self.tag_matrix, columns=['/S','N', 'F', 'E', 'D', 'A', 'R',], index=['N', 'F', 'E', 'D', 'A', 'R', '/T']))
+   
     def you_prob(self):
-        prob_sum = 0.
+        
         you_tot = sum(self.word_taggings['you'].values())
-        for tag,count in self.word_taggings['you'].items():
-            you_prob = count/you_tot
-            print(' P( ' + tag + ' | you ) = ' + str(you_prob) )
-            prob_sum += you_prob
-        print('Sum of probability P(tag|you) = ' + str(prob_sum)) 
+        for tag,wcs in self.tag_words.items():
+            if 'you' in wcs.keys():
+                print('P( you | ' + tag + ') = ' + str(wcs['you']) )
+            else:
+                print('P( you | ' + tag + ') = 0')
+           
     def test_set(self):
 
 
@@ -79,26 +116,58 @@ class UnigramMarkov(object):
         correct = 0
         total = 0
         guess_str = ""
-       
+        sentence = []
+        t_list = []
         for line in test_text:
+            self.states.clear()
+            line=line.rstrip()
+            line = '<s>/S ' + line + ' </s>/T' 
             for w_tag_pair in line.split():
-                
                 word = w_tag_pair[:-2]
-            
-                if word in self.likely_tag.keys():
-                    tag_guess = self.likely_tag[word]
+                tag = w_tag_pair[-2:]
+                sentence.append(word)
+                t_list.append(tag)
+
+                # create state
+                if word in self.word_taggings.keys():
+                    new_state = State(word)
+                    # Create substates
+                    for tag,prob in self.word_taggings[word].items():
+                        new_state.add_substate(tag)
+                    self.states.append(new_state)
                 else:
-                    tag_guess = '/N'
-                guess_str += word + tag_guess + ' '
-                correct_tag = w_tag_pair[-2:]
-                if tag_guess == correct_tag:
-                    correct += 1
+                    new_state = State('<unk>')
+                    for tag,prob in self.word_taggings['<unk>'].items():
+                        new_state.add_substate(tag)
+                    self.states.append(new_state)
+            self.create_edges()
+            # begin viterbi algorithm
+            self.states[0].substates[0].viterbi = 1         
+                        
+            for i,state in enumerate(self.states[1:]):
+                # starting from 1st index, but enumerate default value is 0th index
+                j = i + 1           
+                for substate in state.substates:
+                    for edge in substate.edges:
+                        if edge.start_node.viterbi * edge.weight > substate.viterbi:
+                            substate.viterbi = edge.start_node.viterbi * edge.weight
+                            substate.back_point = edge.start_node
+               
+            best_tags = []
+            cur_state = self.states[-1].substates[0]
+            while cur_state.back_point != None:
+                best_tags.append(cur_state.tag)
+                cur_state = cur_state.back_point
+            best_tags.append('/S')
+            best_tags.reverse()
+            
+            for i,t in enumerate(best_tags):
+                   
+                correct_tag = t_list[i]
+                if t == correct_tag:
+                    correct+= 1
                 total += 1
-        accuracy = correct/total
-        if p == 'true':
-            print ("\nSecond line ---------------------------------------")
-            print("Guessed tags: " + guess_str)
-            print("Correct tags: " + line)
+        accuracy = correct / total
         print ('total accuracy on ' + name + ' = ' + str(accuracy) ) 
     def second_line(self):
         
@@ -106,10 +175,26 @@ class UnigramMarkov(object):
         second_line = [second_line]
         #second_line = second_line.split()
         self.test(second_line, 'second line', 'true' )
+
+    def create_edges(self):
+        # Next state owns incoming transitions
+        # form edges from last state to first
+        self.states.reverse()
+        for i,state in enumerate(self.states):
+            if state.word != '<s>':
+                for cur_substate in state.substates:
+                    # all substates of next state
+                    for prev_sub in self.states[i+1].substates:
+                        end_tag = cur_substate.tag
+                        start_tag = prev_sub.tag
+                        word_weight = self.tag_words[end_tag][self.states[i].word]
+                        tag_weight = self.tag_matrix[self.row_lookup[end_tag]][self.column_lookup[start_tag]]
+                        cur_substate.add_edge(prev_sub, word_weight * tag_weight)
+        self.states.reverse()
 if __name__ == '__main__':
     model = UnigramMarkov()
     model.read_train()
-    #model.you_prob()
+    model.you_prob()
 
 
     model.test_set()
