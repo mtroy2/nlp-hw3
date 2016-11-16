@@ -4,7 +4,7 @@ from tabulate import tabulate
 import numpy as np
 from HMM_Map import *
 from pandas import DataFrame
-
+import collections
 class UnigramMarkov(object):
 
     def __init__(self):
@@ -86,8 +86,12 @@ class UnigramMarkov(object):
                 else:
                     self.tag_words[tag][word] = 1.
         # turn tag_words into probabilities
+        for tag, word_dict in self.tag_words.items():
+            self.tag_words[tag] = collections.OrderedDict(sorted(word_dict.items()))
+        self.tag_words = collections.OrderedDict(sorted(self.tag_words.items()))
         for tag, wcs in self.tag_words.items():
             for word,count in wcs.items():
+                print(tag + " " + word + " " + str(count) + " " + str(sum(wcs.values())))
                 self.tag_words[tag][word] = count / sum(wcs.values())
         self.tag_matrix = np.array(self.tag_matrix)
         col_sum = self.tag_matrix.sum(axis=0)
