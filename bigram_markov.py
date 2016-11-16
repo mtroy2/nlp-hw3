@@ -4,6 +4,7 @@ from tabulate import tabulate
 import numpy as np
 from HMM_Map import *
 from pandas import DataFrame
+
 class UnigramMarkov(object):
 
     def __init__(self):
@@ -133,24 +134,34 @@ class UnigramMarkov(object):
                     new_state = State(word)
                     # Create substates
                     for tag,prob in self.word_taggings[word].items():
-                        new_state.add_substate(tag)
+                        weight = self.tag_words[tag][word]
+                        new_state.add_substate(tag, weight)
+                        
                     self.states.append(new_state)
                 else:
                     new_state = State('<unk>')
                     for tag,prob in self.word_taggings['<unk>'].items():
-                        new_state.add_substate(tag)
+                        weight = self.tag_words[tag]['<unk>']
+                        new_state.add_substate(tag,weight)
+                   
                     self.states.append(new_state)
             self.create_edges()
             # begin viterbi algorithm
-            self.states[0].substates[0].viterbi = 1         
+            self.states[0].substates[0].viterbi = 0        
                         
             for i,state in enumerate(self.states[1:]):
                 # starting from 1st index, but enumerate default value is 0th index
-                j = i + 1           
+            
+                #print("======== SUBSTATES ==========")           
                 for substate in state.substates:
+                    
+                    #print ( "\t" + substate.tag)
+                    #print ("\t" + "Edges:")
                     for edge in substate.edges:
-                        if edge.start_node.viterbi * edge.weight > substate.viterbi:
-                            substate.viterbi = edge.start_node.viterbi * edge.weight
+                        
+                        #print ("\t\t" + edge.start_node.tag + "  ------- " + str(edge.weight) + " ------> " + substate.tag)  
+                        if edge.start_node.viterbi + edge.weight > substate.viterbi:
+                            substate.viterbi = edge.start_node.viterbi + edge.weight
                             substate.back_point = edge.start_node
                
             best_tags = []
@@ -161,8 +172,7 @@ class UnigramMarkov(object):
             best_tags.append('/S')
             best_tags.reverse()
             
-            for i,t in enumerate(best_tags):
-                   
+            for i,t in enumerate(best_tags):     
                 correct_tag = t_list[i]
                 if t == correct_tag:
                     correct+= 1
@@ -187,9 +197,9 @@ class UnigramMarkov(object):
                     for prev_sub in self.states[i+1].substates:
                         end_tag = cur_substate.tag
                         start_tag = prev_sub.tag
-                        word_weight = self.tag_words[end_tag][self.states[i].word]
-                        tag_weight = self.tag_matrix[self.row_lookup[end_tag]][self.column_lookup[start_tag]]
-                        cur_substate.add_edge(prev_sub, word_weight * tag_weight)
+                        word_weight = np.log(cur_substate.word_weight)
+                        tag_weight = np.log(self.tag_matrix[self.row_lookup[end_tag]][self.column_lookup[start_tag]])
+                        cur_substate.add_edge(prev_sub, word_weight + tag_weight)
         self.states.reverse()
 if __name__ == '__main__':
     model = UnigramMarkov()
