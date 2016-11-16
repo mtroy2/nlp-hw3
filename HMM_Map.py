@@ -15,7 +15,7 @@ class Substate(object):
     def __init__(self,tag,weight):
         self.tag = tag
         self.edges = [] 
-        self.viterbi = -100
+        self.viterbi = -1000000
         self.word_weight = weight
         self.back_point = None
     def add_edge(self,end_node,weight):

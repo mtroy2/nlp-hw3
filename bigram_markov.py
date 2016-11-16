@@ -31,7 +31,7 @@ class UnigramMarkov(object):
         self.test_text = test.readlines()
         for line in self.test_text:
             line = line.rstrip()
-        train = open(os.getcwd() + '/hw3-data/train.txt')
+        train = open(os.getcwd() + '/hw3-data/train2.txt')
         self.train_text = train.readlines()
         for line in self.train_text:
             line = line.rstrip()
@@ -91,7 +91,7 @@ class UnigramMarkov(object):
         self.tag_words = collections.OrderedDict(sorted(self.tag_words.items()))
         for tag, wcs in self.tag_words.items():
             for word,count in wcs.items():
-                print(tag + " " + word + " " + str(count) + " " + str(sum(wcs.values())))
+                #print(tag + " " + word + " " + str(count) + " " + str(sum(wcs.values())))
                 self.tag_words[tag][word] = count / sum(wcs.values())
         self.tag_matrix = np.array(self.tag_matrix)
         col_sum = self.tag_matrix.sum(axis=0)
@@ -121,11 +121,12 @@ class UnigramMarkov(object):
         correct = 0
         total = 0
         guess_str = ""
-        sentence = []
-        t_list = []
+
         for line in test_text:
             self.states.clear()
             line=line.rstrip()
+            sentence = []
+            t_list = []
             line = '<s>/S ' + line + ' </s>/T' 
             for w_tag_pair in line.split():
                 word = w_tag_pair[:-2]
@@ -156,26 +157,31 @@ class UnigramMarkov(object):
             for i,state in enumerate(self.states[1:]):
                 # starting from 1st index, but enumerate default value is 0th index
             
-                #print("======== SUBSTATES ==========")           
-                for substate in state.substates:
-                    
-                    #print ( "\t" + substate.tag)
-                    #print ("\t" + "Edges:")
+                for substate in state.substates:      
+                 
                     for edge in substate.edges:
-                        
-                        #print ("\t\t" + edge.start_node.tag + "  ------- " + str(edge.weight) + " ------> " + substate.tag)  
+   
                         if edge.start_node.viterbi + edge.weight > substate.viterbi:
                             substate.viterbi = edge.start_node.viterbi + edge.weight
                             substate.back_point = edge.start_node
-               
+            #for state in self.states:
+             #   print("State: " + state.word)   
+              #  for sub in state.substates:
+               #     print("\tTag: " + sub.tag + " Viterbi: " + str(sub.viterbi ))
+
+
             best_tags = []
             cur_state = self.states[-1].substates[0]
             while cur_state.back_point != None:
                 best_tags.append(cur_state.tag)
                 cur_state = cur_state.back_point
+            
             best_tags.append('/S')
             best_tags.reverse()
-            
+
+            print(best_tags)
+            print(t_list)
+
             for i,t in enumerate(best_tags):     
                 correct_tag = t_list[i]
                 if t == correct_tag:
@@ -208,7 +214,7 @@ class UnigramMarkov(object):
 if __name__ == '__main__':
     model = UnigramMarkov()
     model.read_train()
-    model.you_prob()
+    #model.you_prob()
 
 
     model.test_set()
